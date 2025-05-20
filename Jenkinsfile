@@ -2,13 +2,12 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node 20'
+        nodejs 'Node 20'  // This must match the name you configured in Global Tools
     }
 
-
     environment {
-        AZURE_RG = 'test'
-        AZURE_APP = 'my-jenkins-demo-app'
+        AZURE_RG = 'test'                     // Your actual resource group name
+        AZURE_APP = 'my-jenkins-demo-app'     // Your Azure Web App name
     }
 
     stages {
@@ -29,20 +28,48 @@ pipeline {
                 withCredentials([string(credentialsId: 'azure-sp', variable: 'AZURE_CREDENTIALS_JSON')]) {
                     script {
                         def json = readJSON text: AZURE_CREDENTIALS_JSON
-                        bat """
-                            az logout || echo skipped
-                            az login --service-principal ^
-                              --username ${json.clientId} ^
-                              --password ${json.clientSecret} ^
-                              --tenant ${json.tenantId}
 
-                            powershell Compress-Archive -Path * -DestinationPath app.zip
+                        // Inject values into environment for use in bat
+                        env.clientId     = json.clientId
+                        env.clientSecret = json.clientSecret
+                        env.tenantId     = json.tenantId
+
+                        bat '''
+                            echo ============================
+                            echo Logging into Azure
+                            echo ============================
+
+                            az logout || echo skipped
+
+                            az login --service-principal ^
+                              --username %clientId% ^
+                              --password %clientSecret% ^
+                              --tenant %tenantId% || (
+                                  echo.
+                                  echo ERROR: Azure login failed
+                                  exit /b 1
+                              )
+
+                            echo ============================
+                            echo Creating zip package
+                            echo ============================
+
+                            powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force"
+
+                            echo ============================
+                            echo Deploying to Azure Web App
+                            echo ============================
+
                             az webapp deploy ^
                               --resource-group %AZURE_RG% ^
                               --name %AZURE_APP% ^
                               --src-path app.zip ^
-                              --type zip
-                        """
+                              --type zip || (
+                                  echo.
+                                  echo ERROR: Azure deploy failed
+                                  exit /b 1
+                              )
+                        '''
                     }
                 }
             }
