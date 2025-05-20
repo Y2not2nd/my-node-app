@@ -8,10 +8,11 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                git 'https://github.com/Y2not2nd/my-node-app.git'
-            }
-        }
+    steps {
+        echo 'Code already checked out by Jenkins'
+    }
+}
+
 
         stage('Install Dependencies') {
             steps {
