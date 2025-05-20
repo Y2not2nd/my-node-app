@@ -1,8 +1,13 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'Node 20'
+    }
+
+
     environment {
-        AZURE_RG = 'myResourceGroup'
+        AZURE_RG = 'test'
         AZURE_APP = 'my-jenkins-demo-app'
     }
 
