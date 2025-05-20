@@ -39,16 +39,22 @@ pipeline {
                             echo Logging into Azure
                             echo ============================
 
-                            az logout || echo skipped
+                            rem logout safely even if not logged in
+                            az account show >nul 2>&1
+                            if %ERRORLEVEL%==0 (
+                                az logout
+                            ) else (
+                                echo No account to log out from
+                            )
 
                             az login --service-principal ^
-                              --username %clientId% ^
-                              --password %clientSecret% ^
-                              --tenant %tenantId% || (
-                                  echo.
-                                  echo ERROR: Azure login failed
-                                  exit /b 1
-                              )
+                            --username %clientId% ^
+                            --password %clientSecret% ^
+                            --tenant %tenantId%
+                            if %ERRORLEVEL% NEQ 0 (
+                                echo Azure login failed!
+                                exit /b 1
+                            )
 
                             echo ============================
                             echo Creating zip package
@@ -61,15 +67,16 @@ pipeline {
                             echo ============================
 
                             az webapp deploy ^
-                              --resource-group %AZURE_RG% ^
-                              --name %AZURE_APP% ^
-                              --src-path app.zip ^
-                              --type zip || (
-                                  echo.
-                                  echo ERROR: Azure deploy failed
-                                  exit /b 1
-                              )
+                            --resource-group %AZURE_RG% ^
+                            --name %AZURE_APP% ^
+                            --src-path app.zip ^
+                            --type zip
+                            if %ERRORLEVEL% NEQ 0 (
+                                echo Azure deploy failed!
+                                exit /b 1
+                            )
                         '''
+
                     }
                 }
             }
