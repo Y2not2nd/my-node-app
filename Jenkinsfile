@@ -1,52 +1,83 @@
 pipeline {
     agent any
-    environment {
-        // Azure service principal credentials and app details
-        AZURE_SP_ID     = '<YOUR-AZURE-APP-ID>'           // e.g. client/application ID of SP
-        AZURE_TENANT    = '<YOUR-AZURE-TENANT-ID>'        // tenant ID
-        AZURE_SP_SECRET = credentials('azure-sp')        // secret from Jenkins creds (Secret Text)
-        AZURE_APP_NAME  = '<YOUR-WEBAPP-NAME>'           // Azure Web App name
-        AZURE_GROUP     = '<YOUR-RESOURCE-GROUP-NAME>'    // Azure resource group name
+
+    tools {
+        nodejs 'Node 20' // Must match name in Jenkins Global Tool Configuration
     }
+
+    environment {
+        AZURE_RG  = 'test'                 // Your Azure resource group
+        AZURE_APP = 'my-jenkins-demo-app' // Your Azure Web App name
+    }
+
     stages {
+        stage('Checkout') {
+            steps {
+                echo 'Code already checked out by Jenkins'
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
-                // Install Node.js dependencies
                 bat 'npm install'
             }
         }
+
         stage('Deploy to Azure') {
             steps {
-                // Run Azure CLI commands in a single bat script with error handling
-                bat """
-                @echo off
-                REM Check if Azure CLI is logged in (suppress output)
-                az account show >nul 2>&1
-                IF %ERRORLEVEL% EQU 0 (
-                    echo Logging out any existing Azure CLI session...
-                    az logout >nul 2>&1
-                )
-                echo Logging in to Azure with service principal...
-                az login --service-principal -u \"%AZURE_SP_ID%\" -p \"%AZURE_SP_SECRET%\" --tenant \"%AZURE_TENANT%\" --output none
-                IF %ERRORLEVEL% NEQ 0 (
-                    echo ERROR: Azure CLI login failed.>&2
-                    exit /b %ERRORLEVEL%
-                )
-                echo Azure CLI login succeeded.
-                echo Packaging application into ZIP...
-                powershell -NoLogo -Command \"Compress-Archive -Path '*' -DestinationPath 'app.zip' -Force\"
-                IF %ERRORLEVEL% NEQ 0 (
-                    echo ERROR: Failed to create deployment ZIP package.>&2
-                    exit /b %ERRORLEVEL%
-                )
-                echo Deploying to Azure Web App \"%AZURE_APP_NAME%\" in resource group \"%AZURE_GROUP%\"...
-                az webapp deploy --resource-group \"%AZURE_GROUP%\" --name \"%AZURE_APP_NAME%\" --src-path \"app.zip\" --type zip
-                IF %ERRORLEVEL% NEQ 0 (
-                    echo ERROR: Azure WebApp deployment failed.>&2
-                    exit /b %ERRORLEVEL%
-                )
-                echo Deployment completed successfully.
-                """
+                withCredentials([string(credentialsId: 'azure-sp', variable: 'AZURE_CREDENTIALS_JSON')]) {
+                    script {
+                        def json = readJSON text: AZURE_CREDENTIALS_JSON
+
+                        // Extract and export values
+                        env.clientId     = json.clientId
+                        env.clientSecret = json.clientSecret
+                        env.tenantId     = json.tenantId
+                        env.subId        = json.subscriptionId
+
+                        // Start deployment
+                        bat """
+echo ============================
+echo AZURE LOGIN
+echo ============================
+
+az logout || echo Not logged in
+
+az login --service-principal ^
+  --username %clientId% ^
+  --password %clientSecret% ^
+  --tenant %tenantId%
+
+if %ERRORLEVEL% NEQ 0 (
+    echo Azure login failed
+    exit /b 1
+)
+
+az account set --subscription %subId%
+
+echo ============================
+echo CREATING ZIP PACKAGE
+echo ============================
+
+powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force"
+
+echo ============================
+echo DEPLOYING TO AZURE
+echo ============================
+
+az webapp deploy ^
+  --resource-group %AZURE_RG% ^
+  --name %AZURE_APP% ^
+  --src-path app.zip ^
+  --type zip
+
+if %ERRORLEVEL% NEQ 0 (
+    echo Deployment failed
+    exit /b 1
+)
+"""
+                    }
+                }
             }
         }
     }
