@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node 20'
+        nodejs 'Node 20' // Must match Jenkins Global Tool Configuration
     }
 
     environment {
@@ -27,33 +27,34 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'azure-sp', variable: 'AZURE_CREDENTIALS_JSON')]) {
                     script {
-                        def json = readJSON text: AZURE_CREDENTIALS_JSON
-                        env.clientId = json.clientId
-                        env.clientSecret = json.clientSecret
-                        env.tenantId = json.tenantId
-                        env.subscriptionId = json.subscriptionId
+                        def creds = readJSON text: AZURE_CREDENTIALS_JSON
 
-                        bat 'echo ==== AZURE LOGIN ===='
-                        bat 'az logout || echo Not logged in'
-                        bat """
-                            az login --service-principal ^
-                              --username %clientId% ^
-                              --password %clientSecret% ^
-                              --tenant %tenantId%
-                        """
-                        bat 'az account set --subscription %subscriptionId%'
+                        env.clientId     = creds.clientId
+                        env.clientSecret = creds.clientSecret
+                        env.tenantId     = creds.tenantId
+                        env.subscription = creds.subscriptionId
 
-                        bat 'echo ==== ZIPPING FILES ===='
-                        bat 'powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force"'
+                        bat '''
+echo ==== AZURE LOGIN ====
+az logout || echo Not logged in
 
-                        bat 'echo ==== DEPLOYING TO AZURE ===='
-                        bat """
-                            az webapp deploy ^
-                              --resource-group %AZURE_RG% ^
-                              --name %AZURE_APP% ^
-                              --src-path app.zip ^
-                              --type zip
-                        """
+az login --service-principal ^
+  --username %clientId% ^
+  --password %clientSecret% ^
+  --tenant %tenantId%
+
+az account set --subscription %subscription%
+
+echo ==== ZIPPING FILES ====
+powershell -Command "Compress-Archive -Path server.js,package.json,node_modules -DestinationPath app.zip -Force"
+
+echo ==== DEPLOYING TO AZURE ====
+az webapp deploy ^
+  --resource-group %AZURE_RG% ^
+  --name %AZURE_APP% ^
+  --src-path app.zip ^
+  --type zip || exit /b 1
+'''
                     }
                 }
             }
