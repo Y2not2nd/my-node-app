@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node 20' // Match the name you configured in Jenkins Global Tools
+        nodejs 'Node 20'
     }
 
     environment {
-        AZURE_RG = 'test'                     // Your Azure Resource Group
-        AZURE_APP = 'my-jenkins-demo-app'     // Your Web App name
+        AZURE_RG = 'test'
+        AZURE_APP = 'my-jenkins-demo-app'
     }
 
     stages {
@@ -33,19 +33,21 @@ pipeline {
                         env.tenantId = json.tenantId
                         env.subscriptionId = json.subscriptionId
 
+                        bat 'echo ==== AZURE LOGIN ===='
+                        bat 'az logout || echo Not logged in'
                         bat """
-                            echo ==== AZURE LOGIN ====
-                            az logout || echo Not logged in
                             az login --service-principal ^
                               --username %clientId% ^
                               --password %clientSecret% ^
                               --tenant %tenantId%
-                            az account set --subscription %subscriptionId%
+                        """
+                        bat 'az account set --subscription %subscriptionId%'
 
-                            echo ==== ZIPPING FILES ====
-                            powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force"
+                        bat 'echo ==== ZIPPING FILES ===='
+                        bat 'powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force"'
 
-                            echo ==== DEPLOYING TO AZURE ====
+                        bat 'echo ==== DEPLOYING TO AZURE ===='
+                        bat """
                             az webapp deploy ^
                               --resource-group %AZURE_RG% ^
                               --name %AZURE_APP% ^
