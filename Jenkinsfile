@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'windows' }
+    agent any
     environment {
         // Azure service principal credentials and app details
         AZURE_SP_ID     = '<YOUR-AZURE-APP-ID>'           // e.g. client/application ID of SP
