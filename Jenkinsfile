@@ -19,7 +19,8 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                bat 'npm install'
+                // Clean install
+                bat 'npm ci || npm install'
             }
         }
 
@@ -57,12 +58,15 @@ powershell -Command "Compress-Archive -Path server.js, package.json, package-loc
 echo ==== VERIFY ZIP FILE ==== && ^
 dir app.zip && ^
 echo ==== CONFIGURE APP SETTINGS ==== && ^
-az webapp config set --resource-group %AZURE_RG% --name %AZURE_APP% --startup-file "node server.js" && ^
+az webapp config set --resource-group %AZURE_RG% --name %AZURE_APP% --startup-file "node server.js" --always-on true && ^
+az webapp config appsettings set --resource-group %AZURE_RG% --name %AZURE_APP% --settings WEBSITE_NODE_DEFAULT_VERSION=~20 && ^
 echo ==== DEPLOYING TO AZURE ==== && ^
-az webapp deploy --resource-group %AZURE_RG% --name %AZURE_APP% --src-path app.zip --type zip --verbose && ^
+az webapp deploy --resource-group %AZURE_RG% --name %AZURE_APP% --src-path app.zip --type zip --timeout 1800 --verbose && ^
 echo ==== DEPLOYMENT COMPLETE ==== && ^
 echo Checking deployment status... && ^
-az webapp show --resource-group %AZURE_RG% --name %AZURE_APP% --query state -o tsv
+az webapp show --resource-group %AZURE_RG% --name %AZURE_APP% --query state -o tsv && ^
+echo ==== CHECKING APPLICATION LOGS ==== && ^
+az webapp log tail --resource-group %AZURE_RG% --name %AZURE_APP% --provider http --timeout 60
 """
                     }
                 }
