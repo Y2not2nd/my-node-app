@@ -19,8 +19,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Add error handling for npm install
-                bat 'npm install || exit /b 1'
+                bat 'npm install'
             }
         }
 
@@ -29,42 +28,42 @@ pipeline {
                 withCredentials([string(credentialsId: 'azure-sp', variable: 'AZURE_CREDENTIALS_JSON')]) {
                     script {
                         def json = readJSON text: AZURE_CREDENTIALS_JSON
+                        echo "DEBUG: Client ID = ${json.clientId}"
+                        echo "DEBUG: Tenant ID = ${json.tenantId}"
+                        echo "DEBUG: Subscription ID = ${json.subscriptionId}"
+                        echo "DEBUG: App Name = ${env.AZURE_APP}"
+                        echo "DEBUG: Resource Group = ${env.AZURE_RG}"
+
                         env.clientId = json.clientId
                         env.clientSecret = json.clientSecret
                         env.tenantId = json.tenantId
                         env.subId = json.subscriptionId
 
-                        // Added error handling and cleanup
-                        bat """
-                        echo ==== AZURE LOGIN ==== &&
-                        az logout || echo Not logged in &&
-                        az login --service-principal --username %clientId% --password %clientSecret% --tenant %tenantId% &&
-                        az account set --subscription %subId% &&
-
-                        echo ==== ZIPPING FULL PROJECT ==== &&
-                        if exist app.zip del /f app.zip &&
-                        powershell -Command "Compress-Archive -Path * -DestinationPath app.zip -Force -CompressionLevel Optimal -Exclude node_modules,.git,app.zip" &&
-
-                        echo ==== CONFIGURE AZURE APP SETTINGS ==== &&
-                        az webapp config appsettings set ^
-                          --resource-group %AZURE_RG% ^
-                          --name %AZURE_APP% ^
-                          --settings WEBSITE_NODE_DEFAULT_VERSION=20 SCM_DO_BUILD_DURING_DEPLOYMENT=true &&
-
-                        echo ==== DEPLOY TO AZURE APP SERVICE ==== &&
-                        az webapp deploy ^
-                          --resource-group %AZURE_RG% ^
-                          --name %AZURE_APP% ^
-                          --src-path app.zip ^
-                          --type zip &&
-
-                        del /f app.zip &&
-
-                        IF %ERRORLEVEL% NEQ 0 (
-                            echo Deployment failed
-                            exit /b 1
-                        )
-                        """
+                        // Split commands for better error handling
+                        bat """cmd /c ^
+echo ==== AZURE LOGIN ==== && ^
+az logout || echo Not logged in && ^
+az login --service-principal --username %clientId% --password %clientSecret% --tenant %tenantId% --allow-no-subscriptions && ^
+echo ==== VERIFY LOGIN ==== && ^
+az account show && ^
+echo ==== SET SUBSCRIPTION ==== && ^
+az account set --subscription %subId% && ^
+echo ==== VERIFY SUBSCRIPTION ==== && ^
+az account show --query name -o tsv && ^
+echo ==== PREPARE FOR DEPLOYMENT ==== && ^
+if exist app.zip del /f app.zip && ^
+echo ==== ZIPPING FILES ==== && ^
+powershell -Command "Compress-Archive -Path server.js, package.json, package-lock.json, node_modules -DestinationPath app.zip -Force -Verbose" && ^
+echo ==== VERIFY ZIP FILE ==== && ^
+dir app.zip && ^
+echo ==== CONFIGURE APP SETTINGS ==== && ^
+az webapp config set --resource-group %AZURE_RG% --name %AZURE_APP% --startup-file "node server.js" && ^
+echo ==== DEPLOYING TO AZURE ==== && ^
+az webapp deploy --resource-group %AZURE_RG% --name %AZURE_APP% --src-path app.zip --type zip --verbose && ^
+echo ==== DEPLOYMENT COMPLETE ==== && ^
+echo Checking deployment status... && ^
+az webapp show --resource-group %AZURE_RG% --name %AZURE_APP% --query state -o tsv
+"""
                     }
                 }
             }
@@ -73,8 +72,11 @@ pipeline {
 
     post {
         always {
-            // Cleanup
-            bat 'az logout || echo Not logged in'
+            script {
+                echo "==== Cleanup Phase ===="
+                bat 'if exist app.zip del /f app.zip'
+                bat 'az logout || echo Already logged out'
+            }
         }
     }
 }
