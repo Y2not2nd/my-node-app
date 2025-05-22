@@ -53,7 +53,7 @@ az account show --query name -o tsv && ^
 echo ==== PREPARE FOR DEPLOYMENT ==== && ^
 if exist app.zip del /f app.zip && ^
 echo ==== ZIPPING FILES ==== && ^
-powershell -Command "Compress-Archive -Path server.js, package.json, package-lock.json, node_modules -DestinationPath app.zip -Force -Verbose" && ^
+powershell -Command "Compress-Archive -Path server.js, package.json, package-lock.json, .deployment -DestinationPath app.zip -Force -Verbose" && ^
 echo ==== VERIFY ZIP FILE ==== && ^
 dir app.zip && ^
 echo ==== CONFIGURE APP SETTINGS ==== && ^
