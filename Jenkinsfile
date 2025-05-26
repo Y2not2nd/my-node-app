@@ -66,7 +66,7 @@ echo ==== DEPLOYMENT COMPLETE ==== && ^
 echo Checking deployment status... && ^
 az webapp show --resource-group %AZURE_RG% --name %AZURE_APP% --query state -o tsv && ^
 echo ==== CHECKING APPLICATION LOGS ==== && ^
-az webapp log tail --resource-group %AZURE_RG% --name %AZURE_APP% --provider http --timeout 60
+az webapp log tail --resource-group %AZURE_RG% --name %AZURE_APP% --provider http
 """
                     }
                 }
