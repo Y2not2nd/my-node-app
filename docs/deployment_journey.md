@@ -33,21 +33,24 @@ This section describes the typical structure for your project files, which will 
 ### Project Folder Structure
 The recommended folder structure for your project is as follows:
 
-- deployment/
-  - jenkins.yaml: This file contains the manual Jenkins deployment configuration.
-  - Jenkinsfile: This file defines the Jenkins pipeline steps.
-  - package.json: This file lists your Node.js application's dependencies.
-  - package-lock.json: This file locks the exact versions of your Node.js dependencies.
-- server.js: Your sample API server file.
-- index.js: Your main application entry point (if applicable).
+- .deployment: This file defines the Azure startup command.
+- Jenkinsfile: This file contains the Jenkins pipeline steps (placed directly at the project root, not inside a folder).
+- package.json: This file lists your Node.js application's dependencies.
+- package-lock.json: This file locks the exact versions of your Node.js dependencies.
+- server.js: Your main Node.js server file.
+- README.md: Project documentation.
+- docs/deployment_journey.md: Detailed deployment instructions.
+- node_modules/: Local dependencies (excluded from Git).
 
-The following files are typically created manually by you:
-- deployment/jenkins.yaml
-- deployment/Jenkinsfile
+  The following files are typically created manually by you:
+
+- .deployment
+- Jenkinsfile
 - package.json
 - package-lock.json
 - server.js
-- index.js
+- README.md
+- docs/deployment_journey.md
 
 ---
 
