@@ -66,7 +66,7 @@ echo ==== DEPLOYMENT COMPLETE ==== && ^
 echo Checking deployment status... && ^
 az webapp show --resource-group %AZURE_RG% --name %AZURE_APP% --query state -o tsv && ^
 echo ==== CHECKING APPLICATION LOGS ==== && ^
-az webapp log tail --resource-group %AZURE_RG% --name %AZURE_APP% --provider http
+az webapp log download --resource-group %AZURE_RG% --name %AZURE_APP% --log-file logs.txt && type logs.txt
 """
                     }
                 }
@@ -79,6 +79,7 @@ az webapp log tail --resource-group %AZURE_RG% --name %AZURE_APP% --provider htt
             script {
                 echo "==== Cleanup Phase ===="
                 bat 'if exist app.zip del /f app.zip'
+                bat 'if exist logs.txt del /f logs.txt'
                 bat 'az logout || echo Already logged out'
             }
         }
