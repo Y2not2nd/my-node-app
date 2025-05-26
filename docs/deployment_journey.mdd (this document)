@@ -1,0 +1,258 @@
+Jenkins Deployment Guide
+
+Overview
+
+This guide explains how to:
+1. Deploy Jenkins on a project.
+2. Configure Jenkins for automated deployment.
+3. Create a Jenkinsfile.
+
+What you need
+
+* Existing project (e.g., a simple Node.js project).
+* Azure CLI installed.
+* An Azure Subscription and an Azure App Service named my-jenkins-app. You may need to create these resources if they do not exist.
+* Node.js 20 installed on your local device 
+* Patient environment (has different names, be sure to update the Jenkinsfile and Azure resources if they don't match).
+
+Project Layout
+
+This section describes the typical structure for a Jenkins deployment.
+
+* Node.js project (manual setup)
+* Simple API (installed locally)
+* Jenkins (installed locally)
+* Git (installed locally on local machine)
+* Azure (installed locally on local machine, Azure resources)
+
+Project Folder Structure
+
+The recommended folder structure for your project:
+
+* deployment/
+    * jenkins.yaml - Jenkins deployment configuration (manual)
+    * Jenkinsfile - Jenkins pipeline definition (manual)
+    * package.json - Node.js dependencies (manual)
+    * package-lock.json - Node.js dependencies lock file (manual)
+* server.js - Sample API (manual)
+* index.js - Sample API (manual)
+
+Manually created files include:
+* deployment/jenkins.yaml
+* deployment/Jenkinsfile
+* package.json
+* package-lock.json
+* server.js
+* index.js
+
+Local Setup
+
+Follow these steps to set up your project locally:
+
+1.  Create project folder:
+    mkdir my-project
+    cd my-project
+    mkdir deployment
+
+2.  Initialize npm (press enter for defaults):
+    npm init
+
+3.  Install express:
+    npm install express --save
+
+4.  Create server.js:
+
+    // server.js
+    const express = require('express');
+    const app = express();
+    const port = process.env.PORT || 3000;
+
+    app.get('/', (req, res) => {
+      res.send('Hello from your app, deployed via Jenkins!');
+    });
+
+    app.listen(port, () => {
+      console.log('App listening on port ' + port);
+    });
+
+5.  Test the app (optional):
+    node server.js
+    (You should see 'App listening on port 3000')
+
+    Open your browser and navigate to http://localhost:3000.
+    (You should see 'Hello from your app, deployed via Jenkins!')
+
+6.  Create index.js (empty file):
+    touch index.js
+
+GitHub Setup
+
+These steps guide you through setting up your GitHub repository:
+
+1.  Create a new GitHub repository:
+    Go to https://github.com/new.
+
+2.  Initialize a Git project:
+    git init
+
+3.  Add the original project setup:
+    (This is typically done via your repository web interface).
+    git remote add origin https://github.com/YOUR_USERNAME/my-node-app.git
+
+4.  Add and commit changes:
+    git add .
+    git commit -m "Initial commit"
+
+5.  Push to main branch:
+    git push -u origin main
+
+Azure Setup
+
+Follow these steps to configure your Azure resources:
+
+1.  Azure CLI setup (if not already done):
+    az login
+
+2.  Create a resource group:
+    az group create --name my-jenkins-rg --location westeurope
+
+3.  Create an Azure App Service:
+    az appservice plan create --name my-jenkins-plan --resource-group my-jenkins-rg --sku B1 --is-linux
+    az webapp create --name my-jenkins-app --resource-group my-jenkins-rg --plan my-jenkins-plan
+
+4.  Create a Service Principal (if needed):
+    az ad sp create-for-rbac --name http://my-jenkins-sp --role contributor --scopes /subscriptions/YOUR_SUBSCRIPTION_ID
+    This will output details like:
+    {
+      "appId": "YOUR_APP_ID",
+      "displayName": "http://my-jenkins-sp",
+      "password": "YOUR_CLIENT_SECRET",
+      "tenant": "YOUR_TENANT_ID"
+    }
+    Make a note of the appId, password, and tenant values.
+
+Jenkins Setup
+
+These steps detail how to set up Jenkins for deployment:
+
+1.  Download Jenkins:
+    Download Jenkins from https://www.jenkins.io/download/, install it, and access it via http://localhost:8080.
+
+2.  Install suggested plugins:
+    Follow the prompts to install the suggested plugins.
+
+3.  Configure global tools:
+    Go to Manage Jenkins > Global Tool Configuration.
+    Add NodeJS and Git installations.
+
+4.  Add credentials:
+    Go to Manage Jenkins > Credentials > System > Global credentials (unrestricted).
+    Add a new Secret text credential for your GitHub Personal Access Token (PAT).
+    Add a new Username with password credential for your Azure Service Principal:
+    * Username: YOUR_APP_ID
+    * Password: YOUR_CLIENT_SECRET
+    * ID: azure-credentials
+
+5.  Create a new Jenkins job:
+    Go to New Item, enter a name (e.g., My Node.js App Deployment), select Pipeline, and click OK.
+
+6.  Configure the pipeline:
+    Select "Pipeline script from SCM", choose Git, enter your repository URL (https://github.com/YOUR_USERNAME/my-node-app.git), select the branch (main), and enter deployment/Jenkinsfile as the script path.
+
+Jenkinsfile (Pipeline Definition)
+
+This is the Jenkinsfile that defines your deployment pipeline:
+
+pipeline {
+    agent {
+        node {
+            label 'node 20' // Or a suitable node label
+        }
+    }
+
+    environment {
+        AZURE_APP_NAME = 'my-jenkins-app' // Change if your app name is different
+        AZURE_RESOURCE_GROUP = 'my-jenkins-rg' // Change if your resource group is different
+        AZURE_SUBSCRIPTION_ID = 'YOUR_SUBSCRIPTION_ID'
+        AZURE_TENANT_ID = credentials('azure-credentials').tenant
+        AZURE_CLIENT_ID = credentials('azure-credentials').username
+        AZURE_CLIENT_SECRET = credentials('azure-credentials').password
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'npm run build' // Or your build command
+            }
+        }
+
+        stage('Deploy to Azure') {
+            steps {
+                withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
+                    sh '''
+                        az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+                        az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+                        az webapp deploy --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_APP_NAME}" --src-path "server.js" --target-path "server.js"
+                        az webapp deploy --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_APP_NAME}" --src-path "index.js" --target-path "index.js"
+                        az webapp deploy --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_APP_NAME}" --src-path "package.json" --target-path "package.json"
+                        az webapp deploy --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_APP_NAME}" --src-path "node_modules" --target-path "node_modules" --type zip --ignore-zip-errors
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+            echo 'Pipeline finished.'
+        }
+    }
+}
+
+Note: Remember to update YOUR_USERNAME, YOUR_SUBSCRIPTION_ID, and other placeholders with your actual values. Also, ensure your Azure App Service uses Node.js as its runtime.
+
+Troubleshooting
+
+Jenkins Build
+
+1.  Check console output:
+    The console output provides detailed logs for each step of the build.
+
+2.  Check Azure Build Logs:
+    Go to Azure portal > my-jenkins-rg > my-jenkins-app > Deployment Center > Logs.
+
+Azure Resources
+
+1.  Check Resource Group:
+    Go to Azure portal > my-jenkins-rg. Make sure all resources are in the correct state.
+
+2.  Check App Service Logs:
+    Go to Azure portal > my-jenkins-rg > my-jenkins-app > Log Stream.
+
+Common Errors and Solutions
+
+* NPM or NODE NOT FOUND: Make sure NodeJS is installed globally on the Jenkins machine and configured in Manage Jenkins > Global Tool Configuration.
+* GIT NOT FOUND: Make sure Git is installed globally on the Jenkins machine and configured in Manage Jenkins > Global Tool Configuration.
+* No such file or directory: This typically means a file path is incorrect in your Jenkinsfile or project structure.
+* Authentication failed: Check your GitHub Personal Access Token or Azure Service Principal credentials in Jenkins. Ensure the Azure Service Principal has the correct role (contributor).
+* az webapp deploy failed: Verify that your Azure App Service name (my-jenkins-app) and resource group (my-jenkins-rg) are correct. Also, ensure your Jenkinsfile is pointing to the correct files for deployment.
+* Service shows 404/500 error:
+    * Check your Node.js application logs in Azure.
+    * Verify that your server.js is correctly configured and listening on the expected port.
+    * Ensure all necessary files (e.g., package.json, node_modules) are deployed to Azure.
+* Cannot run az command or permission denied: Ensure Azure CLI is installed on the Jenkins machine and the Jenkins user has permissions to execute az commands.
+* Subscription not found: Double-check that AZURE_SUBSCRIPTION_ID is correct in your Jenkinsfile and that the Service Principal has access to that subscription.
+* Jenkins is stuck: Check the Jenkins logs for any errors. Try restarting the Jenkins service.
