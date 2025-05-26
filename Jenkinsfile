@@ -80,7 +80,7 @@ az webapp log download --resource-group %AZURE_RG% --name %AZURE_APP% --log-file
                 echo "==== Cleanup Phase ===="
                 bat 'if exist app.zip del /f app.zip'
                 bat 'if exist logs.txt del /f logs.txt'
-                bat 'az logout || echo Already logged out'
+                bat 'az logout || echo already logged out'
             }
         }
     }
