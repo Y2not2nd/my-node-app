@@ -40,15 +40,6 @@ This includes:
 
 ---
 
-##  How to Check File History
-
-To see older versions of files (like the Jenkinsfile):
-1. Go to the file in GitHub.
-2. Click **History**.
-3. Browse past commits to review or restore changes.
-
----
-
 ##  Technologies Used
 
 - Node.js + Express
